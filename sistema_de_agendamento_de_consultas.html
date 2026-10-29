@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Agendamento Médico & Estético</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc;
+        }
+        .slot-free {
+            background-color: #f0fdf4;
+            border-color: #bbf7d0;
+            color: #166534;
+        }
+        .slot-free:hover {
+            background-color: #dcfce7;
+            transform: translateY(-2px);
+        }
+        .slot-pending {
+            background-color: #fefce8;
+            border-color: #fef08a;
+            color: #854d0e;
+            cursor: not-allowed;
+        }
+        .slot-occupied {
+            background-color: #f1f5f9;
+            border-color: #cbd5e1;
+            color: #64748b;
+            cursor: not-allowed;
+        }
+        .slot-fixed {
+            background-color: #eff6ff;
+            border-color: #bfdbfe;
+            color: #1e40af;
+            cursor: not-allowed;
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body class="text-slate-800 min-h-screen flex flex-col">
+
+    <!-- BARRA SUPERIOR DE ALTERNÂNCIA DE AMBIENTE (Simulação) -->
+    <div class="bg-slate-900 text-white px-4 py-2.5 shadow-md flex justify-between items-center sticky top-0 z-50">
+        <div class="flex items-center gap-2">
+            <i data-lucide="calendar-heart" class="text-teal-400"></i>
+            <span class="font-bold tracking-wide text-sm sm:text-base">Consultório Dra. Amanda Silva</span>
+        </div>
+        <div class="flex items-center gap-2 bg-slate-800 p-1 rounded-lg border border-slate-700">
+            <span class="text-xs text-slate-400 px-2 hidden sm:inline">Modo de Exibição:</span>
+            <button id="btnViewPatient" onclick="switchView('patient')" class="px-3 py-1 text-xs font-semibold rounded-md bg-teal-600 text-white transition-all shadow">
+                <i data-lucide="user" class="inline w-3.5 h-3.5 mr-1"></i> Paciente
+            </button>
+            <button id="btnViewAdmin" onclick="switchView('admin')" class="px-3 py-1 text-xs font-semibold rounded-md text-slate-300 hover:text-white transition-all">
+                <i data-lucide="shield-check" class="inline w-3.5 h-3.5 mr-1"></i> Profissional (Admin)
+            </button>
+        </div>
+    </div>
+
+    <!-- CONTEÚDO PRINCIPAL -->
+    <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8">
+
+        <!-- ============================================================== -->
+        <!-- VISÃO DO PACIENTE                                              -->
+        <!-- ============================================================== -->
+        <section id="patientView" class="space-y-6">
+            <!-- Header do Paciente -->
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                    <h1 class="text-2xl font-bold text-slate-900">Agende sua Consulta</h1>
+                    <p class="text-slate-500 text-sm mt-1">Selecione um dia e escolha um horário livre para solicitar sua marcação.</p>
+                </div>
+                <!-- Legenda dos Horários -->
+                <div class="flex flex-wrap gap-3 text-xs font-medium">
+                    <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-emerald-500 inline-block"></span> Livre</div>
+                    <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-amber-400 inline-block"></span> Em Aprovação</div>
+                    <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-slate-400 inline-block"></span> Ocupado</div>
+                    <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-blue-500 inline-block"></span> Horário Fixo</div>
+                </div>
+            </div>
+
+            <!-- Seleção de Data e Navegação -->
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-wrap items-center justify-between gap-4">
+                <div class="flex items-center gap-3">
+                    <i data-lucide="calendar" class="text-teal-600"></i>
+                    <label for="patientDateSelect" class="font-semibold text-slate-700 text-sm">Data do Agendamento:</label>
+                    <input type="date" id="patientDateSelect" onchange="renderPatientSlots()" class="border border-slate-300 rounded-lg px-3 py-1.5 text-sm font-medium focus:ring-2 focus:ring-teal-500 outline-none">
+                </div>
+                <div class="text-xs text-slate-500 italic">
+                    * Todos os agendamentos passam por aprovação prévia.
+                </div>
+            </div>
+
+            <!-- Grade de Horários do Paciente -->
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                <h2 id="currentSelectedDateText" class="text-lg font-semibold text-slate-800 mb-4 pb-2 border-b border-slate-100">
+                    Horários para Hoje
+                </h2>
+                <div id="patientSlotsGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                    <!-- Gerado dinamicamente via JS -->
+                </div>
+            </div>
+        </section>
+
+        <!-- ============================================================== -->
+        <!-- VISÃO DA PROFISSIONAL / ADMIN                                  -->
+        <!-- ============================================================== -->
+        <section id="adminView" class="space-y-6 hidden">
+            <!-- Header do Admin -->
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                    <h1 class="text-2xl font-bold text-slate-900">Painel de Gestão de Consultas</h1>
+                    <p class="text-slate-500 text-sm mt-1">Gerencie solicitações, aprove/reprove e cadastre pacientes recorrentes.</p>
+                </div>
+                <button onclick="openFixedModal()" class="bg-teal-600 hover:bg-teal-700 text-white font-medium px-4 py-2.5 rounded-xl text-sm flex items-center gap-2 transition-all shadow-sm">
+                    <i data-lucide="repeat" class="w-4 h-4"></i> Novo Agendamento Recorrente (Fixo)
+                </button>
+            </div>
+
+            <!-- Cards Resumo estatístico -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4">
+                    <div class="p-3 bg-amber-50 text-amber-600 rounded-xl"><i data-lucide="clock"></i></div>
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Pendentes</p>
+                        <p id="countPending" class="text-2xl font-bold text-slate-800">0</p>
+                    </div>
+                </div>
+                <div class="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4">
+                    <div class="p-3 bg-emerald-50 text-emerald-600 rounded-xl"><i data-lucide="check-circle"></i></div>
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Aprovadas</p>
+                        <p id="countApproved" class="text-2xl font-bold text-slate-800">0</p>
+                    </div>
+                </div>
+                <div class="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4">
+                    <div class="p-3 bg-blue-50 text-blue-600 rounded-xl"><i data-lucide="calendar-check"></i></div>
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Horários Fixos</p>
+                        <p id="countFixed" class="text-2xl font-bold text-slate-800">0</p>
+                    </div>
+                </div>
+                <div class="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4">
+                    <div class="p-3 bg-red-50 text-red-600 rounded-xl"><i data-lucide="x-circle"></i></div>
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Reprovadas</p>
+                        <p id="countRejected" class="text-2xl font-bold text-slate-800">0</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Seção de Pedidos Pendentes de Aprovação -->
+            <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
+                <h2 class="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+                    <i data-lucide="alert-circle" class="text-amber-500"></i> Solicitações Pendentes de Aprovação
+                </h2>
+                <div id="pendingList" class="space-y-3">
+                    <!-- Gerado dinamicamente via JS -->
+                </div>
+            </div>
+
+            <!-- Tabela de Todos os Agendamentos / Histórico com Filtros -->
+            <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+                    <h2 class="text-lg font-bold text-slate-900">Todos os Agendamentos Cadastrados</h2>
+                    <div class="flex items-center gap-2">
+                        <select id="filterStatus" onchange="renderAdminTables()" class="border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-medium focus:ring-2 focus:ring-teal-500 outline-none">
+                            <option value="ALL">Todos os Status</option>
+                            <option value="PENDING">Pendentes</option>
+                            <option value="APPROVED">Aprovados</option>
+                            <option value="FIXED">Fixos Recorrentes</option>
+                            <option value="REJECTED">Reprovados</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-sm text-slate-600">
+                        <thead class="bg-slate-50 text-slate-500 font-semibold uppercase text-xs border-b border-slate-200">
+                            <tr>
+                                <th class="p-3">Data & Horário</th>
+                                <th class="p-3">Paciente</th>
+                                <th class="p-3">Contato</th>
+                                <th class="p-3">Status</th>
+                                <th class="p-3">Justificativa / Obs</th>
+                            </tr>
+                        </thead>
+                        <tbody id="allAppointmentsTable" class="divide-y divide-slate-100">
+                            <!-- Gerado dinamicamente via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- ============================================================== -->
+    <!-- MODAIS                                                         -->
+    <!-- ============================================================== -->
+
+    <!-- Modal 1: Formulário de Solicitação do Paciente -->
+    <div id="modalPatientBooking" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+        <div class="bg-white w-full max-w-md rounded-2xl shadow-xl overflow-hidden animate-in fade-in zoom-in duration-150">
+            <div class="bg-teal-600 text-white p-5 flex justify-between items-center">
+                <h3 class="font-bold text-lg">Solicitar Agendamento</h3>
+                <button onclick="closeModal('modalPatientBooking')" class="text-teal-100 hover:text-white"><i data-lucide="x"></i></button>
+            </div>
+            <form id="patientForm" onsubmit="handlePatientBookingSubmit(event)" class="p-6 space-y-4">
+                <div class="bg-teal-50 border border-teal-100 rounded-xl p-3 text-xs text-teal-800 flex justify-between items-center">
+                    <div>
+                        <span class="block font-semibold">Data e Horário Escolhidos:</span>
+                        <span id="bookingModalDetail" class="text-sm font-bold"></span>
+                    </div>
+                    <i data-lucide="clock" class="text-teal-600"></i>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">Nome Completo *</label>
+                    <input type="text" id="patientName" required placeholder="Ex: Maria Oliveira" class="w-full border border-slate-300 rounded-xl px-3.5 py-2 text-sm focus:ring-2 focus:ring-teal-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">E-mail para Confirmação *</label>
+                    <input type="email" id="patientEmail" required placeholder="seuemail@exemplo.com" class="w-full border border-slate-300 rounded-xl px-3.5 py-2 text-sm focus:ring-2 focus:ring-teal-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">Telefone / WhatsApp *</label>
+                    <input type="tel" id="patientPhone" required placeholder="(11) 99999-8888" class="w-full border border-slate-300 rounded-xl px-3.5 py-2 text-sm focus:ring-2 focus:ring-teal-500 outline-none">
+                </div>
+
+                <div class="flex justify-end gap-3 pt-2">
+                    <button type="button" onclick="closeModal('modalPatientBooking')" class="px-4 py-2 border border-slate-300 text-slate-600 rounded-xl text-sm font-medium hover:bg-slate-50">Cancelar</button>
+                    <button type="submit" class="px-5 py-2 bg-teal-600 hover:bg-teal-700 text-white font-medium rounded-xl text-sm shadow-md transition-all">Confirmar Solicitação</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal 2: Justificativa de Reprovação (Admin) -->
+    <div id="modalRejectReason" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+        <div class="bg-white w-full max-w-md rounded-2xl shadow-xl overflow-hidden">
+            <div class="bg-red-600 text-white p-5 flex justify-between items-center">
+                <h3 class="font-bold text-lg">Reprovar Agendamento</h3>
+                <button onclick="closeModal('modalRejectReason')" class="text-red-100 hover:text-white"><i data-lucide="x"></i></button>
+            </div>
+            <form id="rejectForm" onsubmit="confirmRejection(event)" class="p-6 space-y-4">
+                <input type="hidden" id="rejectAppointmentId">
+                <p class="text-xs text-slate-500">Informe ao paciente o motivo pelo qual o agendamento não pode ser aceito neste horário.</p>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">Motivo / Justificativa *</label>
+                    <textarea id="rejectReasonInput" required rows="3" placeholder="Ex: Imprevisto pessoal ou necessidade de manutenção no consultório nesse horário." class="w-full border border-slate-300 rounded-xl p-3 text-sm focus:ring-2 focus:ring-red-500 outline-none"></textarea>
+                </div>
+                <div class="flex justify-end gap-3">
+                    <button type="button" onclick="closeModal('modalRejectReason')" class="px-4 py-2 border border-slate-300 text-slate-600 rounded-xl text-sm font-medium hover:bg-slate-50">Cancelar</button>
+                    <button type="submit" class="px-5 py-2 bg-red-600 hover:bg-red-700 text-white font-medium rounded-xl text-sm shadow-md transition-all">Confirmar Reprovação</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal 3: Cadastro de Agendamento Fixo Recorrente (Admin) -->
+    <div id="modalFixedBooking" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+        <div class="bg-white w-full max-w-md rounded-2xl shadow-xl overflow-hidden">
+            <div class="bg-blue-600 text-white p-5 flex justify-between items-center">
+                <h3 class="font-bold text-lg">Cadastrar Agendamento Fixo Recorrente</h3>
+                <button onclick="closeModal('modalFixedBooking')" class="text-blue-100 hover:text-white"><i data-lucide="x"></i></button>
+            </div>
+            <form id="fixedForm" onsubmit="handleFixedBookingSubmit(event)" class="p-6 space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">Nome do Paciente *</label>
+                    <input type="text" id="fixedPatientName" required placeholder="Ex: Ana Clara Souza" class="w-full border border-slate-300 rounded-xl px-3.5 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">E-mail</label>
+                        <input type="email" id="fixedPatientEmail" placeholder="paciente@email.com" class="w-full border border-slate-300 rounded-xl px-3.5 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">Telefone</label>
+                        <input type="tel" id="fixedPatientPhone" placeholder="(11) 98888-7777" class="w-full border border-slate-300 rounded-xl px-3.5 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">Data Inicial *</label>
+                        <input type="date" id="fixedStartDate" required class="w-full border border-slate-300 rounded-xl px-3.5 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">Horário *</label>
+                        <select id="fixedTimeSlot" required class="w-full border border-slate-300 rounded-xl px-3.5 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                            <!-- Preenchido dinamicamente com horários das 08h às 18h -->
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">Recorrência (Semanas) *</label>
+                    <select id="fixedWeeks" required class="w-full border border-slate-300 rounded-xl px-3.5 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                        <option value="4">4 Semanas (1 Mês)</option>
+                        <option value="8">8 Semanas (2 Meses)</option>
+                        <option value="12" selected>12 Semanas (3 Meses)</option>
+                        <option value="24">24 Semanas (6 Meses)</option>
+                    </select>
+                </div>
+                <div class="flex justify-end gap-3 pt-2">
+                    <button type="button" onclick="closeModal('modalFixedBooking')" class="px-4 py-2 border border-slate-300 text-slate-600 rounded-xl text-sm font-medium hover:bg-slate-50">Cancelar</button>
+                    <button type="submit" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl text-sm shadow-md transition-all">Gerar Recorrência</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- JAVASCRIPT DA APLICAÇÃO -->
+    <script>
+        // =================================================================
+        // CONFIGURAÇÕES E ESTADO GLOBAL
+        // =================================================================
+        const TIME_SLOTS = [
+            "08:00", "09:00", "10:00", "11:00", 
+            "13:00", "14:00", "15:00", "16:00", "17:00", "18:00"
+        ];
+
+        // Carrega agendamentos salvos ou inicia com array vazio
+        let appointments = JSON.parse(localStorage.getItem("app_appointments")) || [];
+        let selectedSlotTemp = null; // { date: 'YYYY-MM-DD', time: 'HH:MM' }
+
+        // Inicialização ao carregar a página
+        document.addEventListener("DOMContentLoaded", () => {
+            lucide.createIcons();
+            
+            // Define data atual no input do paciente
+            const todayISO = new Date().toISOString().split('T')[0];
+            document.getElementById("patientDateSelect").value = todayISO;
+            document.getElementById("fixedStartDate").value = todayISO;
+
+            // Popula os horários no modal de agendamento fixo
+            const fixedTimeSelect = document.getElementById("fixedTimeSlot");
+            TIME_SLOTS.forEach(time => {
+                const opt = document.createElement("option");
+                opt.value = time;
+                opt.textContent = time;
+                fixedTimeSelect.appendChild(opt);
+            });
+
+            // Renderiza telas
+            renderPatientSlots();
+            renderAdminDashboard();
+        });
+
+        // Salvar no LocalStorage
+        function saveAppointments() {
+            localStorage.setItem("app_appointments", JSON.stringify(appointments));
+        }
+
+        // Alternância de Visão (Paciente / Admin)
+        function switchView(view) {
+            const patientView = document.getElementById("patientView");
+            const adminView = document.getElementById("adminView");
+            const btnPatient = document.getElementById("btnViewPatient");
+            const btnAdmin = document.getElementById("btnViewAdmin");
+
+            if (view === 'patient') {
+                patientView.classList.remove("hidden");
+                adminView.classList.add("hidden");
+                btnPatient.className = "px-3 py-1 text-xs font-semibold rounded-md bg-teal-600 text-white transition-all shadow";
+                btnAdmin.className = "px-3 py-1 text-xs font-semibold rounded-md text-slate-300 hover:text-white transition-all";
+                renderPatientSlots();
+            } else {
+                patientView.classList.add("hidden");
+                adminView.classList.remove("hidden");
+                btnAdmin.className = "px-3 py-1 text-xs font-semibold rounded-md bg-teal-600 text-white transition-all shadow";
+                btnPatient.className = "px-3 py-1 text-xs font-semibold rounded-md text-slate-300 hover:text-white transition-all";
+                renderAdminDashboard();
+            }
+        }
+
+        // =================================================================
+        // LÓGICA DO PACIENTE
+        // =================================================================
+        function renderPatientSlots() {
+            const selectedDate = document.getElementById("patientDateSelect").value;
+            const grid = document.getElementById("patientSlotsGrid");
+            grid.innerHTML = "";
+
+            // Formatação legível da data
+            const dateParts = selectedDate.split("-");
+            const formattedDateStr = `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}`;
+            document.getElementById("currentSelectedDateText").textContent = `Horários para: ${formattedDateStr}`;
+
+            if (!selectedDate) {
+                grid.innerHTML = `<p class="text-slate-400 col-span-full">Por favor, selecione uma data válida.</p>`;
+                return;
+            }
+
+            TIME_SLOTS.forEach(time => {
+                // Procura se existe algum agendamento para esta data e horário (exceto REJECTED)
+                const existing = appointments.find(a => a.date === selectedDate && a.time === time && a.status !== 'REJECTED');
+                
+                const btn = document.createElement("button");
+                btn.className = "p-3.5 rounded-xl border text-center transition-all flex flex-col items-center justify-center gap-1 shadow-sm font-medium";
+
+                if (!existing) {
+                    // LIVRE
+                    btn.classList.add("slot-free");
+                    btn.innerHTML = `
+                        <span class="text-base font-bold">${time}</span>
+                        <span class="text-[10px] uppercase font-semibold px-2 py-0.5 rounded-full bg-emerald-200/60 text-emerald-800">Livre</span>
+                    `;
+                    btn.onclick = () => openPatientBookingModal(selectedDate, time);
+                } else if (existing.status === 'PENDING') {
+                    // PENDENTE
+                    btn.classList.add("slot-pending");
+                    btn.disabled = true;
+                    btn.innerHTML = `
+                        <span class="text-base font-bold">${time}</span>
+                        <span class="text-[10px] uppercase font-semibold px-2 py-0.5 rounded-full bg-amber-200/60 text-amber-800">Em Aprovação</span>
+                    `;
+                } else if (existing.status === 'FIXED') {
+                    // FIXO
+                    btn.classList.add("slot-fixed");
+                    btn.disabled = true;
+                    btn.innerHTML = `
+                        <span class="text-base font-bold">${time}</span>
+                        <span class="text-[10px] uppercase font-semibold px-2 py-0.5 rounded-full bg-blue-200/60 text-blue-800">Horário Fixo</span>
+                    `;
+                } else {
+                    // OCUPADO (APPROVED)
+                    btn.classList.add("slot-occupied");
+                    btn.disabled = true;
+                    btn.innerHTML = `
+                        <span class="text-base font-bold">${time}</span>
+                        <span class="text-[10px] uppercase font-semibold px-2 py-0.5 rounded-full bg-slate-200 text-slate-600">Ocupado</span>
+                    `;
+                }
+
+                grid.appendChild(btn);
+            });
+        }
+
+        function openPatientBookingModal(date, time) {
+            selectedSlotTemp = { date, time };
+            const dateParts = date.split("-");
+            document.getElementById("bookingModalDetail").textContent = `${dateParts[2]}/${dateParts[1]}/${dateParts[0]} às ${time}h`;
+            document.getElementById("modalPatientBooking").classList.remove("hidden");
+        }
+
+        function handlePatientBookingSubmit(e) {
+            e.preventDefault();
+
+            const name = document.getElementById("patientName").value.trim();
+            const email = document.getElementById("patientEmail").value.trim();
+            const phone = document.getElementById("patientPhone").value.trim();
+
+            const newAppointment = {
+                id: 'APP-' + Date.now(),
+                date: selectedSlotTemp.date,
+                time: selectedSlotTemp.time,
+                patientName: name,
+                patientEmail: email,
+                patientPhone: phone,
+                status: 'PENDING',
+                reason: '',
+                createdAt: new Date().toISOString()
+            };
+
+            // Adiciona no array local
+            appointments.push(newAppointment);
+            saveAppointments();
+
+            // Integração futura com Google Sheets
+            syncWithGoogleSheets('CREATE', newAppointment);
+
+            // Simulação de Notificação por E-mail
+            simulateEmailNotification({
+                to: 'profissional.admin@consultorio.com',
+                subject: '🔔 Novo Pedido de Agendamento!',
+                body: `O paciente ${name} solicitou marcação para a data ${selectedSlotTemp.date} às ${selectedSlotTemp.time}h.`
+            });
+
+            // Reseta formulário e fecha modal
+            document.getElementById("patientForm").reset();
+            closeModal("modalPatientBooking");
+            renderPatientSlots();
+
+            alert("Sua solicitação foi enviada com sucesso! A profissional enviará uma confirmação em breve.");
+        }
+
+        // =================================================================
+        // LÓGICA DO PROFISSIONAL (ADMIN)
+        // =================================================================
+        function renderAdminDashboard() {
+            renderAdminCounters();
+            renderPendingList();
+            renderAdminTables();
+        }
+
+        function renderAdminCounters() {
+            document.getElementById("countPending").textContent = appointments.filter(a => a.status === 'PENDING').length;
+            document.getElementById("countApproved").textContent = appointments.filter(a => a.status === 'APPROVED').length;
+            document.getElementById("countFixed").textContent = appointments.filter(a => a.status === 'FIXED').length;
+            document.getElementById("countRejected").textContent = appointments.filter(a => a.status === 'REJECTED').length;
+        }
+
+        function renderPendingList() {
+            const pendingList = document.getElementById("pendingList");
+            const pendings = appointments.filter(a => a.status === 'PENDING');
+            pendingList.innerHTML = "";
+
+            if (pendings.length === 0) {
+                pendingList.innerHTML = `<p class="text-sm text-slate-400 italic">Nenhuma solicitação pendente no momento.</p>`;
+                return;
+            }
+
+            pendings.forEach(app => {
+                const dateParts = app.date.split("-");
+                const formattedDate = `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}`;
+
+                const card = document.createElement("div");
+                card.className = "flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded-xl gap-4";
+                card.innerHTML = `
+                    <div class="space-y-1">
+                        <div class="flex items-center gap-2">
+                            <span class="font-bold text-slate-900">${app.patientName}</span>
+                            <span class="bg-amber-100 text-amber-800 text-[11px] font-semibold px-2 py-0.5 rounded-md">Pendente</span>
+                        </div>
+                        <p class="text-xs text-slate-600 flex items-center gap-3">
+                            <span><i data-lucide="calendar" class="inline w-3.5 h-3.5 mr-1 text-teal-600"></i>${formattedDate} às ${app.time}h</span>
+                            <span><i data-lucide="mail" class="inline w-3.5 h-3.5 mr-1 text-slate-400"></i>${app.patientEmail}</span>
+                            <span><i data-lucide="phone" class="inline w-3.5 h-3.5 mr-1 text-slate-400"></i>${app.patientPhone}</span>
+                        </p>
+                    </div>
+                    <div class="flex items-center gap-2 w-full sm:w-auto">
+                        <button onclick="approveAppointment('${app.id}')" class="flex-1 sm:flex-none px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold transition-all shadow-sm flex items-center justify-center gap-1">
+                            <i data-lucide="check" class="w-3.5 h-3.5"></i> Aprovar
+                        </button>
+                        <button onclick="openRejectModal('${app.id}')" class="flex-1 sm:flex-none px-3.5 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-semibold transition-all shadow-sm flex items-center justify-center gap-1">
+                            <i data-lucide="x" class="w-3.5 h-3.5"></i> Reprovar
+                        </button>
+                    </div>
+                `;
+                pendingList.appendChild(card);
+            });
+            lucide.createIcons();
+        }
+
+        function approveAppointment(id) {
+            const app = appointments.find(a => a.id === id);
+            if (app) {
+                app.status = 'APPROVED';
+                saveAppointments();
+
+                // Integração futura com Google Sheets
+                syncWithGoogleSheets('UPDATE', app);
+
+                simulateEmailNotification({
+                    to: app.patientEmail,
+                    subject: '✅ Sua consulta foi APROVADA!',
+                    body: `Olá ${app.patientName}, sua consulta do dia ${app.date} às ${app.time}h foi confirmada.`
+                });
+
+                renderAdminDashboard();
+            }
+        }
+
+        function openRejectModal(id) {
+            document.getElementById("rejectAppointmentId").value = id;
+            document.getElementById("modalRejectReason").classList.remove("hidden");
+        }
+
+        function confirmRejection(e) {
+            e.preventDefault();
+            const id = document.getElementById("rejectAppointmentId").value;
+            const reason = document.getElementById("rejectReasonInput").value.trim();
+
+            const app = appointments.find(a => a.id === id);
+            if (app) {
+                app.status = 'REJECTED';
+                app.reason = reason;
+                saveAppointments();
+
+                // Integração futura com Google Sheets
+                syncWithGoogleSheets('UPDATE', app);
+
+                simulateEmailNotification({
+                    to: app.patientEmail,
+                    subject: '❌ Atualização sobre sua solicitação de consulta',
+                    body: `Olá ${app.patientName}, infelizmente seu agendamento para ${app.date} às ${app.time}h não foi aprovado. Motivo: ${reason}`
+                });
+
+                document.getElementById("rejectForm").reset();
+                closeModal("modalRejectReason");
+                renderAdminDashboard();
+            }
+        }
+
+        // Agendamento Recorrente (Fixo)
+        function openFixedModal() {
+            document.getElementById("modalFixedBooking").classList.remove("hidden");
+        }
+
+        function handleFixedBookingSubmit(e) {
+            e.preventDefault();
+
+            const name = document.getElementById("fixedPatientName").value.trim();
+            const email = document.getElementById("fixedPatientEmail").value.trim();
+            const phone = document.getElementById("fixedPatientPhone").value.trim();
+            const startDateStr = document.getElementById("fixedStartDate").value;
+            const time = document.getElementById("fixedTimeSlot").value;
+            const weeksCount = parseInt(document.getElementById("fixedWeeks").value, 10);
+
+            let createdCount = 0;
+            let startDate = new Date(startDateStr + 'T00:00:00');
+
+            for (let i = 0; i < weeksCount; i++) {
+                const currentDate = new Date(startDate);
+                currentDate.setDate(startDate.getDate() + (i * 7));
+                const dateISO = currentDate.toISOString().split('T')[0];
+
+                // Verifica se o horário já está livre antes de cadastrar
+                const conflict = appointments.find(a => a.date === dateISO && a.time === time && a.status !== 'REJECTED');
+                
+                if (!conflict) {
+                    const newFixedApp = {
+                        id: 'FIXED-' + Date.now() + '-' + i,
+                        date: dateISO,
+                        time: time,
+                        patientName: name,
+                        patientEmail: email || 'Não informado',
+                        patientPhone: phone || 'Não informado',
+                        status: 'FIXED',
+                        reason: 'Agendamento Fixo Recorrente Profissional',
+                        createdAt: new Date().toISOString()
+                    };
+
+                    appointments.push(newFixedApp);
+                    syncWithGoogleSheets('CREATE', newFixedApp);
+                    createdCount++;
+                }
+            }
+
+            saveAppointments();
+            document.getElementById("fixedForm").reset();
+            closeModal("modalFixedBooking");
+            renderAdminDashboard();
+
+            alert(`Foram gerados ${createdCount} agendamentos fixos com sucesso nas próximas semanas!`);
+        }
+
+        // Tabela completa e filtros
+        function renderAdminTables() {
+            const tableBody = document.getElementById("allAppointmentsTable");
+            const filterValue = document.getElementById("filterStatus").value;
+            tableBody.innerHTML = "";
+
+            let filtered = appointments;
+            if (filterValue !== 'ALL') {
+                filtered = appointments.filter(a => a.status === filterValue);
+            }
+
+            // Ordena por data mais recente
+            filtered.sort((a, b) => new Date(b.date + 'T' + b.time) - new Date(a.date + 'T' + a.time));
+
+            if (filtered.length === 0) {
+                tableBody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-slate-400 italic">Nenhum registro encontrado.</td></tr>`;
+                return;
+            }
+
+            filtered.forEach(app => {
+                const dateParts = app.date.split("-");
+                const formattedDate = `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}`;
+
+                let statusBadge = "";
+                if (app.status === 'PENDING') statusBadge = `<span class="bg-amber-100 text-amber-800 text-xs px-2 py-0.5 rounded-full font-semibold">Pendente</span>`;
+                else if (app.status === 'APPROVED') statusBadge = `<span class="bg-emerald-100 text-emerald-800 text-xs px-2 py-0.5 rounded-full font-semibold">Aprovado</span>`;
+                else if (app.status === 'FIXED') statusBadge = `<span class="bg-blue-100 text-blue-800 text-xs px-2 py-0.5 rounded-full font-semibold">Fixo</span>`;
+                else if (app.status === 'REJECTED') statusBadge = `<span class="bg-red-100 text-red-800 text-xs px-2 py-0.5 rounded-full font-semibold">Reprovado</span>`;
+
+                const tr = document.createElement("tr");
+                tr.className = "hover:bg-slate-50 border-b border-slate-100";
+                tr.innerHTML = `
+                    <td class="p-3 font-semibold text-slate-800">${formattedDate} - ${app.time}h</td>
+                    <td class="p-3 font-medium">${app.patientName}</td>
+                    <td class="p-3 text-xs text-slate-500">${app.patientEmail}<br>${app.patientPhone}</td>
+                    <td class="p-3">${statusBadge}</td>
+                    <td class="p-3 text-xs text-slate-500">${app.reason || '-'}</td>
+                `;
+                tableBody.appendChild(tr);
+            });
+        }
+
+        // Helper Modal
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.add("hidden");
+        }
+
+        // Simulation E-mail
+        function simulateEmailNotification({ to, subject, body }) {
+            console.log(`%c[SIMULAÇÃO E-MAIL PARA: ${to}]`, 'color: #0d9488; font-weight: bold;');
+            console.log(`Assunto: ${subject}`);
+            console.log(`Mensagem: ${body}`);
+        }
+
+        // =================================================================
+        // CONEXÃO / INTEGRAÇÃO COM GOOGLE SHEETS (PREPARAÇÃO)
+        // =================================================================
+        /*
+          INSTRUÇÕES FUTURAS PARA O GOOGLE APPS SCRIPT:
+          
+          1. Crie uma Planilha no Google Drive com as colunas:
+             ID | Data | Horario | Nome | Email | Telefone | Status | Justificativa | CriadoEm
+
+          2. No menu "Extensões" > "Apps Script", insira um código semelhante a este:
+
+             function doPost(e) {
+               var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+               var data = JSON.parse(e.postData.contents);
+               
+               if (data.action === 'CREATE') {
+                 sheet.appendRow([
+                   data.item.id, data.item.date, data.item.time,
+                   data.item.patientName, data.item.patientEmail,
+                   data.item.patientPhone, data.item.status,
+                   data.item.reason, data.item.createdAt
+                 ]);
+                 // Envio real de e-mail usando MailApp do Google:
+                 // MailApp.sendEmail("admin@email.com", "Novo Agendamento", "Detalhes...");
+               }
+               return ContentService.createTextOutput(JSON.stringify({result: 'success'})).setMimeType(ContentService.MimeType.JSON);
+             }
+
+          3. Implante como Web App ("Qualquer pessoa" pode acessar) e cole a URL abaixo.
+        */
+
+        const GOOGLE_SCRIPT_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwbiOfA4k_mvnbTcf1Pn_O8Tjw2cZs9qp-o0Awsg9L0q36oNuuUp9rDzHj7g55mLic/exec"; // Insira sua URL do Google Apps Script aqui no futuro
+
+        function syncWithGoogleSheets(action, appointmentData) {
+            if (!GOOGLE_SCRIPT_WEB_APP_URL) {
+                console.log("ℹ️ Conexão Google Sheets: URL ainda não configurada. Dados armazenados localmente.");
+                return;
+            }
+
+            fetch(GOOGLE_SCRIPT_WEB_APP_URL, {
+                method: "POST",
+                mode: "no-cors",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ action: action, item: appointmentData })
+            })
+            .then(res => console.log("Sincronizado com Google Sheets!"))
+            .catch(err => console.error("Erro ao sincronizar com Google Sheets:", err));
+        }
+    </script>
+</body>
+</html>
